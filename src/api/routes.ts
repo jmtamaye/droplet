@@ -155,6 +155,8 @@ export function createRouter(svc: PortfolioService): Router {
     const lines = csv.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
 
+    const accountId = typeof req.query.accountId === 'string' ? req.query.accountId : undefined;
+
     // Parse header
     const header = lines[0].split(',').map(h => h.trim().toLowerCase());
     const nameIdx = header.indexOf('name');
@@ -162,9 +164,16 @@ export function createRouter(svc: PortfolioService): Router {
     const classIdx = header.findIndex(h => h === 'assetclass' || h === 'asset_class' || h === 'class');
     const currencyIdx = header.indexOf('currency');
     const priceIdx = header.findIndex(h => h === 'currentprice' || h === 'current_price' || h === 'price');
+    const qtyIdx = header.indexOf('quantity');
+    const valueIdx = header.findIndex(h => h === 'marketvalue' || h === 'market_value' || h === 'currentvalue' || h === 'current_value' || h === 'value');
 
     if (nameIdx === -1) return res.status(400).json({ error: 'CSV must have a "name" column' });
     if (classIdx === -1) return res.status(400).json({ error: 'CSV must have an "assetClass" (or "asset_class" or "class") column' });
+
+    const hasHoldingCols = qtyIdx >= 0;
+    if (hasHoldingCols && !accountId) {
+      return res.status(400).json({ error: 'CSV has quantity column but no accountId was provided. Select an account for holdings.' });
+    }
 
     const validClasses = new Set([
       'equity', 'fixed_income', 'commodity', 'real_estate', 'cash',
@@ -172,6 +181,7 @@ export function createRouter(svc: PortfolioService): Router {
     ]);
 
     const created: any[] = [];
+    const holdingsCreated: any[] = [];
     const errors: string[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -199,12 +209,31 @@ export function createRouter(svc: PortfolioService): Router {
           currentPrice: currentPrice != null && !isNaN(currentPrice) ? currentPrice : undefined,
         });
         created.push(asset);
+
+        // Create holding if quantity column exists and accountId provided
+        if (hasHoldingCols && accountId) {
+          const qtyStr = cols[qtyIdx]?.trim();
+          const quantity = qtyStr ? parseFloat(qtyStr) : undefined;
+          const valStr = valueIdx >= 0 ? cols[valueIdx]?.trim() : undefined;
+          const marketValue = valStr ? parseFloat(valStr) : undefined;
+
+          if (quantity != null && !isNaN(quantity) && quantity > 0) {
+            const holding = svc.addHolding({
+              accountId,
+              assetId: asset.id,
+              quantity,
+              currentValue: marketValue != null && !isNaN(marketValue) ? marketValue : 0,
+              costBasis: marketValue != null && !isNaN(marketValue) ? marketValue : 0,
+            });
+            holdingsCreated.push(holding);
+          }
+        }
       } catch (err: any) {
         errors.push(`Row ${i + 1}: ${err.message}`);
       }
     }
 
-    res.status(201).json({ imported: created.length, errors });
+    res.status(201).json({ imported: created.length, holdings: holdingsCreated.length, errors });
   });
 
   // ── Asset Tags ──────────────────────────────────────────────────
