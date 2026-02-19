@@ -680,25 +680,6 @@ window.deleteHolding = async function(id) {
 
 // ── CSV Import ──────────────────────────────────────────────────────
 
-function csvHasHoldingColumns(text) {
-  const firstLine = text.split(/\r?\n/)[0] || '';
-  const headers = firstLine.toLowerCase();
-  return headers.includes('quantity');
-}
-
-async function sendCsvImport(text, accountId) {
-  let url = '/api/assets/import-csv';
-  if (accountId) url += `?accountId=${encodeURIComponent(accountId)}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/csv' },
-    body: text,
-  });
-  const result = await res.json();
-  if (!res.ok) throw new Error(result.error || 'Unknown error');
-  return result;
-}
-
 document.getElementById('btn-import-csv').addEventListener('click', () => {
   const input = document.createElement('input');
   input.type = 'file';
@@ -707,44 +688,25 @@ document.getElementById('btn-import-csv').addEventListener('click', () => {
     const file = input.files[0];
     if (!file) return;
     const text = await file.text();
-
     try {
-      if (csvHasHoldingColumns(text)) {
-        // CSV has quantity — need an account for holdings
-        const accounts = await api.get('/accounts');
-        if (accounts.length === 0) {
-          alert('Your CSV has a "quantity" column but there are no accounts yet. Please create an institution and account first.');
-          return;
-        }
-        const acctOpts = accounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
-        openModal('Import CSV — Select Account', `
-          <div class="form-group">
-            <p style="color:var(--text-muted); margin-bottom:12px">
-              Your CSV includes quantity/value columns. Select the account to create holdings in:
-            </p>
-            <label>Account</label>
-            <select id="f-csv-account">${acctOpts}</select>
-          </div>
-        `, async () => {
-          const accountId = document.getElementById('f-csv-account').value;
-          const result = await sendCsvImport(text, accountId);
-          let msg = `Imported ${result.imported} asset(s) and ${result.holdings || 0} holding(s).`;
-          if (result.errors && result.errors.length > 0) {
-            msg += `\n\n${result.errors.length} row(s) skipped:\n` + result.errors.join('\n');
-          }
-          alert(msg);
-          loadAssets();
-        });
-      } else {
-        // No quantity column — just import assets
-        const result = await sendCsvImport(text, null);
-        let msg = `Imported ${result.imported} asset(s).`;
-        if (result.errors && result.errors.length > 0) {
-          msg += `\n\n${result.errors.length} row(s) skipped:\n` + result.errors.join('\n');
-        }
-        alert(msg);
-        loadAssets();
+      const res = await fetch('/api/assets/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv' },
+        body: text,
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        alert('Import failed: ' + (result.error || 'Unknown error'));
+        return;
       }
+      let msg = `Imported ${result.imported} asset(s)`;
+      if (result.holdings > 0) msg += ` and ${result.holdings} holding(s)`;
+      msg += '.';
+      if (result.errors && result.errors.length > 0) {
+        msg += `\n\n${result.errors.length} row(s) skipped:\n` + result.errors.join('\n');
+      }
+      alert(msg);
+      loadAssets();
     } catch (err) {
       alert('Import failed: ' + err.message);
     }

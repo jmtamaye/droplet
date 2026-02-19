@@ -155,8 +155,6 @@ export function createRouter(svc: PortfolioService): Router {
     const lines = csv.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
 
-    const accountId = typeof req.query.accountId === 'string' ? req.query.accountId : undefined;
-
     // Parse header
     const header = lines[0].split(',').map(h => h.trim().toLowerCase());
     const nameIdx = header.indexOf('name');
@@ -166,13 +164,22 @@ export function createRouter(svc: PortfolioService): Router {
     const priceIdx = header.findIndex(h => h === 'currentprice' || h === 'current_price' || h === 'price');
     const qtyIdx = header.indexOf('quantity');
     const valueIdx = header.findIndex(h => h === 'marketvalue' || h === 'market_value' || h === 'currentvalue' || h === 'current_value' || h === 'value');
+    const accountIdx = header.indexOf('account');
 
     if (nameIdx === -1) return res.status(400).json({ error: 'CSV must have a "name" column' });
     if (classIdx === -1) return res.status(400).json({ error: 'CSV must have an "assetClass" (or "asset_class" or "class") column' });
 
     const hasHoldingCols = qtyIdx >= 0;
-    if (hasHoldingCols && !accountId) {
-      return res.status(400).json({ error: 'CSV has quantity column but no accountId was provided. Select an account for holdings.' });
+    if (hasHoldingCols && accountIdx === -1) {
+      return res.status(400).json({ error: 'CSV has a "quantity" column but no "account" column. Add an "account" column to specify which account each holding belongs to.' });
+    }
+
+    // Build account name → id lookup (case-insensitive)
+    const accountsByName = new Map<string, string>();
+    if (hasHoldingCols) {
+      for (const acct of svc.getAccounts()) {
+        accountsByName.set(acct.name.toLowerCase(), acct.id);
+      }
     }
 
     const validClasses = new Set([
@@ -200,6 +207,19 @@ export function createRouter(svc: PortfolioService): Router {
       const priceStr = priceIdx >= 0 ? cols[priceIdx]?.trim() : undefined;
       const currentPrice = priceStr ? parseFloat(priceStr) : undefined;
 
+      // Resolve account name for holdings
+      let resolvedAccountId: string | undefined;
+      if (hasHoldingCols && accountIdx >= 0) {
+        const accountName = cols[accountIdx]?.trim();
+        if (accountName) {
+          resolvedAccountId = accountsByName.get(accountName.toLowerCase());
+          if (!resolvedAccountId) {
+            errors.push(`Row ${i + 1}: account "${accountName}" not found`);
+            continue;
+          }
+        }
+      }
+
       try {
         const asset = svc.addAsset({
           symbol,
@@ -210,8 +230,8 @@ export function createRouter(svc: PortfolioService): Router {
         });
         created.push(asset);
 
-        // Create holding if quantity column exists and accountId provided
-        if (hasHoldingCols && accountId) {
+        // Create holding if quantity column exists and account resolved
+        if (hasHoldingCols && resolvedAccountId) {
           const qtyStr = cols[qtyIdx]?.trim();
           const quantity = qtyStr ? parseFloat(qtyStr) : undefined;
           const valStr = valueIdx >= 0 ? cols[valueIdx]?.trim() : undefined;
@@ -219,7 +239,7 @@ export function createRouter(svc: PortfolioService): Router {
 
           if (quantity != null && !isNaN(quantity) && quantity > 0) {
             const holding = svc.addHolding({
-              accountId,
+              accountId: resolvedAccountId,
               assetId: asset.id,
               quantity,
               currentValue: marketValue != null && !isNaN(marketValue) ? marketValue : 0,
