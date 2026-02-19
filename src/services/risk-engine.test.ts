@@ -4,8 +4,8 @@ import { TaggingEngine } from './tagging-engine';
 import { RiskEngine } from './risk-engine';
 import { AssetClass, InstitutionType, Currency } from '../models/types';
 
-function setupPortfolio() {
-  const db = createInMemoryDatabase();
+async function setupPortfolio() {
+  const db = await createInMemoryDatabase();
   const instRepo = new InstitutionRepo(db);
   const acctRepo = new AccountRepo(db);
   const assetRepo = new AssetRepo(db);
@@ -29,16 +29,16 @@ function setupPortfolio() {
 }
 
 describe('RiskEngine', () => {
-  it('returns empty report for empty portfolio', () => {
-    const { riskEngine } = setupPortfolio();
+  it('returns empty report for empty portfolio', async () => {
+    const { riskEngine } = await setupPortfolio();
     const report = riskEngine.generateReport();
 
     expect(report.totalPortfolioValue).toBe(0);
     expect(report.exposures).toHaveLength(0);
   });
 
-  it('correctly attributes HYG holding to credit risk', () => {
-    const { assetRepo, holdingRepo, engine, riskEngine, brokerage } = setupPortfolio();
+  it('correctly attributes HYG holding to credit risk', async () => {
+    const { assetRepo, holdingRepo, engine, riskEngine, brokerage } = await setupPortfolio();
 
     const hyg = assetRepo.create({
       symbol: 'HYG', name: 'iShares High Yield Bond ETF', assetClass: AssetClass.FIXED_INCOME,
@@ -62,8 +62,8 @@ describe('RiskEngine', () => {
     expect(equityExposure).toBeUndefined();
   });
 
-  it('splits risk across mixed portfolio', () => {
-    const { assetRepo, holdingRepo, engine, riskEngine, brokerage } = setupPortfolio();
+  it('splits risk across mixed portfolio', async () => {
+    const { assetRepo, holdingRepo, engine, riskEngine, brokerage } = await setupPortfolio();
 
     // SPY → equity risk
     const spy = assetRepo.create({
@@ -116,8 +116,8 @@ describe('RiskEngine', () => {
     expect(credit!.pctOfPortfolio).toBeCloseTo(0.2, 2);
   });
 
-  it('generates concentration warning for large single-asset position', () => {
-    const { assetRepo, holdingRepo, engine, riskEngine, brokerage } = setupPortfolio();
+  it('generates concentration warning for large single-asset position', async () => {
+    const { assetRepo, holdingRepo, engine, riskEngine, brokerage } = await setupPortfolio();
 
     const spy = assetRepo.create({
       symbol: 'SPY', name: 'SPDR S&P 500 ETF', assetClass: AssetClass.EQUITY,
@@ -148,8 +148,8 @@ describe('RiskEngine', () => {
     expect(spyWarning!.pctOfPortfolio).toBeCloseTo(0.8, 2);
   });
 
-  it('generates institution concentration warning', () => {
-    const { instRepo, acctRepo, assetRepo, holdingRepo, engine, riskEngine, fidelity, brokerage } = setupPortfolio();
+  it('generates institution concentration warning', async () => {
+    const { instRepo, acctRepo, assetRepo, holdingRepo, engine, riskEngine, fidelity, brokerage } = await setupPortfolio();
 
     // Schwab has just 10%
     const schwab = instRepo.create({ name: 'Schwab', type: InstitutionType.BROKERAGE });

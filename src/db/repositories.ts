@@ -2,7 +2,7 @@
  * Data access layer — thin repository wrappers around SQLite queries.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from './adapter';
 import { v4 as uuid } from 'uuid';
 import {
   Institution, Account, Asset, Holding, Tag, AssetTag,
@@ -22,7 +22,7 @@ function today(): string {
 // ── Institution Repository ──────────────────────────────────────────
 
 export class InstitutionRepo {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database) {}
 
   create(data: { name: string; type: InstitutionType; notes?: string }): Institution {
     const inst: Institution = {
@@ -78,7 +78,7 @@ export class InstitutionRepo {
 // ── Account Repository ──────────────────────────────────────────────
 
 export class AccountRepo {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database) {}
 
   create(data: {
     institutionId: string; name: string; accountType: string;
@@ -145,7 +145,7 @@ export class AccountRepo {
 // ── Asset Repository ────────────────────────────────────────────────
 
 export class AssetRepo {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database) {}
 
   create(data: {
     symbol?: string; name: string; assetClass: AssetClass;
@@ -234,7 +234,7 @@ export class AssetRepo {
 // ── Holding Repository ──────────────────────────────────────────────
 
 export class HoldingRepo {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database) {}
 
   create(data: {
     accountId: string; assetId: string; quantity: number;
@@ -314,7 +314,7 @@ export class HoldingRepo {
 // ── Tag Repository ──────────────────────────────────────────────────
 
 export class TagRepo {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database) {}
 
   create(data: { name: string; category: TagCategory; description?: string }): Tag {
     const tag: Tag = { id: uuid(), ...data };
@@ -359,7 +359,7 @@ export class TagRepo {
 // ── AssetTag Repository ─────────────────────────────────────────────
 
 export class AssetTagRepo {
-  constructor(private db: Database.Database) {}
+  constructor(private db: Database) {}
 
   set(data: { assetId: string; tagId: string; weight?: number; source?: 'auto' | 'manual' }): AssetTag {
     const at: AssetTag = {

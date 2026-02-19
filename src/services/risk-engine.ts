@@ -6,7 +6,7 @@
  * warnings when any single position or bucket exceeds configurable thresholds.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../db/adapter';
 import {
   RiskReport, RiskExposure, RiskContributor, ConcentrationWarning,
   RiskCategory, TagCategory, Holding, Asset, AssetTag, Tag,
@@ -57,7 +57,7 @@ export class RiskEngine {
   private accountRepo: AccountRepo;
 
   constructor(
-    private db: Database.Database,
+    private db: Database,
     private thresholds: RiskThresholds = DEFAULT_THRESHOLDS,
   ) {
     this.holdingRepo = new HoldingRepo(db);

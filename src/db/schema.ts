@@ -2,8 +2,10 @@
  * SQLite schema definitions and database initialization.
  */
 
-import Database from 'better-sqlite3';
 import path from 'path';
+import { Database, openDatabase, openMemoryDatabase } from './adapter';
+
+export type { Database };
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS institutions (
@@ -75,9 +77,9 @@ CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_assets_symbol ON assets(symbol);
 `;
 
-export function createDatabase(dbPath?: string): Database.Database {
+export async function createDatabase(dbPath?: string): Promise<Database> {
   const resolvedPath = dbPath || path.join(process.cwd(), 'portfolio.db');
-  const db = new Database(resolvedPath);
+  const db = await openDatabase(resolvedPath);
 
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -87,8 +89,8 @@ export function createDatabase(dbPath?: string): Database.Database {
   return db;
 }
 
-export function createInMemoryDatabase(): Database.Database {
-  const db = new Database(':memory:');
+export async function createInMemoryDatabase(): Promise<Database> {
+  const db = await openMemoryDatabase();
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
   return db;

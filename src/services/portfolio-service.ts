@@ -4,7 +4,7 @@
  * viewing portfolios.
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../db/adapter';
 import {
   Institution, Account, Asset, Holding, Tag, AssetTag,
   InstitutionType, AssetClass, Currency, TagCategory,
@@ -28,7 +28,7 @@ export class PortfolioService {
   private taggingEngine: TaggingEngine;
   private riskEngine: RiskEngine;
 
-  constructor(private db: Database.Database, thresholds?: RiskThresholds) {
+  constructor(private db: Database, thresholds?: RiskThresholds) {
     this.institutionRepo = new InstitutionRepo(db);
     this.accountRepo = new AccountRepo(db);
     this.assetRepo = new AssetRepo(db);

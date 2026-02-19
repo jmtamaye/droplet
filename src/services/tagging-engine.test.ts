@@ -3,8 +3,8 @@ import { AssetRepo, AssetTagRepo, TagRepo } from '../db/repositories';
 import { TaggingEngine } from './tagging-engine';
 import { AssetClass, Currency } from '../models/types';
 
-function setup() {
-  const db = createInMemoryDatabase();
+async function setup() {
+  const db = await createInMemoryDatabase();
   const assetRepo = new AssetRepo(db);
   const assetTagRepo = new AssetTagRepo(db);
   const tagRepo = new TagRepo(db);
@@ -20,8 +20,8 @@ function getTagNames(assetId: string, assetTagRepo: AssetTagRepo, tagRepo: TagRe
 
 describe('TaggingEngine', () => {
   describe('US High Yield ETF → credit risk, not equity risk', () => {
-    it('classifies HYG as credit risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies HYG as credit risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const hyg = assetRepo.create({
         symbol: 'HYG',
         name: 'iShares iBoxx $ High Yield Corporate Bond ETF',
@@ -37,8 +37,8 @@ describe('TaggingEngine', () => {
       expect(tags).not.toContain('equity_risk');
     });
 
-    it('classifies JNK as credit risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies JNK as credit risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const jnk = assetRepo.create({
         symbol: 'JNK',
         name: 'SPDR Bloomberg High Yield Bond ETF',
@@ -52,8 +52,8 @@ describe('TaggingEngine', () => {
       expect(tags).not.toContain('equity_risk');
     });
 
-    it('classifies by name pattern "high yield" even without known symbol', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies by name pattern "high yield" even without known symbol', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const custom = assetRepo.create({
         symbol: 'XHYLD',
         name: 'Custom High Yield Bond Fund',
@@ -69,8 +69,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Gold ETF → commodity/gold, not equity risk', () => {
-    it('classifies GLD as gold / commodity risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies GLD as gold / commodity risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const gld = assetRepo.create({
         symbol: 'GLD',
         name: 'SPDR Gold Shares',
@@ -85,8 +85,8 @@ describe('TaggingEngine', () => {
       expect(tags).not.toContain('equity_risk');
     });
 
-    it('classifies IAU as gold', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies IAU as gold', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const iau = assetRepo.create({
         symbol: 'IAU',
         name: 'iShares Gold Trust',
@@ -102,8 +102,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('US Large Cap Equity', () => {
-    it('classifies SPY as equity risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies SPY as equity risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const spy = assetRepo.create({
         symbol: 'SPY',
         name: 'SPDR S&P 500 ETF Trust',
@@ -121,8 +121,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('REITs', () => {
-    it('classifies VNQ as real estate risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies VNQ as real estate risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const vnq = assetRepo.create({
         symbol: 'VNQ',
         name: 'Vanguard Real Estate ETF',
@@ -138,8 +138,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Treasury Bonds', () => {
-    it('classifies TLT as interest rate risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies TLT as interest rate risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const tlt = assetRepo.create({
         symbol: 'TLT',
         name: 'iShares 20+ Year Treasury Bond ETF',
@@ -156,8 +156,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Crypto', () => {
-    it('classifies BTC as crypto risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies BTC as crypto risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const btc = assetRepo.create({
         symbol: 'BTC',
         name: 'Bitcoin',
@@ -174,8 +174,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Physical assets', () => {
-    it('classifies real estate as real_estate_risk + liquidity_risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies real estate as real_estate_risk + liquidity_risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const house = assetRepo.create({
         name: 'Primary Residence',
         assetClass: AssetClass.REAL_ESTATE,
@@ -189,8 +189,8 @@ describe('TaggingEngine', () => {
       expect(tags).toContain('liquidity_risk');
     });
 
-    it('classifies vehicle as depreciation risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies vehicle as depreciation risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const car = assetRepo.create({
         name: '2023 Tesla Model 3',
         assetClass: AssetClass.VEHICLE,
@@ -206,8 +206,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Emerging Markets', () => {
-    it('classifies EEM with equity + currency risk', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('classifies EEM with equity + currency risk', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const eem = assetRepo.create({
         symbol: 'EEM',
         name: 'iShares MSCI Emerging Markets ETF',
@@ -224,8 +224,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Fallback classification', () => {
-    it('falls back to asset class default when no rule matches', () => {
-      const { assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('falls back to asset class default when no rule matches', async () => {
+      const { assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const unknown = assetRepo.create({
         symbol: 'XYZABC',
         name: 'Some Obscure Fund',
@@ -240,8 +240,8 @@ describe('TaggingEngine', () => {
   });
 
   describe('Re-classification preserves manual tags', () => {
-    it('keeps manual tags when re-classifying', () => {
-      const { db, assetRepo, assetTagRepo, tagRepo, engine } = setup();
+    it('keeps manual tags when re-classifying', async () => {
+      const { db, assetRepo, assetTagRepo, tagRepo, engine } = await setup();
       const spy = assetRepo.create({
         symbol: 'SPY',
         name: 'SPDR S&P 500 ETF Trust',

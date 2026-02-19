@@ -11,7 +11,7 @@
  *   - An S&P 500 ETF (e.g. SPY) → equity_risk
  */
 
-import Database from 'better-sqlite3';
+import { Database } from '../db/adapter';
 import { Asset, AssetClass, TagCategory, RiskCategory } from '../models/types';
 import { TagRepo, AssetTagRepo } from '../db/repositories';
 
@@ -306,7 +306,7 @@ export class TaggingEngine {
   private tagRepo: TagRepo;
   private assetTagRepo: AssetTagRepo;
 
-  constructor(private db: Database.Database) {
+  constructor(private db: Database) {
     this.tagRepo = new TagRepo(db);
     this.assetTagRepo = new AssetTagRepo(db);
   }

@@ -2,15 +2,15 @@ import { createInMemoryDatabase } from '../db/schema';
 import { PortfolioService } from './portfolio-service';
 import { AssetClass, InstitutionType, Currency, TagCategory } from '../models/types';
 
-function createService() {
-  const db = createInMemoryDatabase();
+async function createService() {
+  const db = await createInMemoryDatabase();
   return new PortfolioService(db);
 }
 
 describe('PortfolioService', () => {
   describe('end-to-end portfolio workflow', () => {
-    it('creates institutions, accounts, assets, holdings and produces summary', () => {
-      const svc = createService();
+    it('creates institutions, accounts, assets, holdings and produces summary', async () => {
+      const svc = await createService();
 
       // Set up institutions
       const fidelity = svc.addInstitution({ name: 'Fidelity', type: InstitutionType.BROKERAGE });
@@ -100,8 +100,8 @@ describe('PortfolioService', () => {
   });
 
   describe('manual tagging', () => {
-    it('adds manual tags and preserves them on reclassification', () => {
-      const svc = createService();
+    it('adds manual tags and preserves them on reclassification', async () => {
+      const svc = await createService();
 
       const spy = svc.addAsset({
         symbol: 'SPY', name: 'SPDR S&P 500 ETF', assetClass: AssetClass.EQUITY,
@@ -123,8 +123,8 @@ describe('PortfolioService', () => {
   });
 
   describe('CRUD operations', () => {
-    it('updates and deletes institutions', () => {
-      const svc = createService();
+    it('updates and deletes institutions', async () => {
+      const svc = await createService();
       const inst = svc.addInstitution({ name: 'Test', type: InstitutionType.BANK });
 
       const updated = svc.updateInstitution(inst.id, { name: 'Updated' });
@@ -134,8 +134,8 @@ describe('PortfolioService', () => {
       expect(svc.getInstitution(inst.id)).toBeUndefined();
     });
 
-    it('updates and deletes holdings', () => {
-      const svc = createService();
+    it('updates and deletes holdings', async () => {
+      const svc = await createService();
       const inst = svc.addInstitution({ name: 'Fidelity', type: InstitutionType.BROKERAGE });
       const acct = svc.addAccount({ institutionId: inst.id, name: 'Brokerage', accountType: 'brokerage' });
       const asset = svc.addAsset({ symbol: 'VTI', name: 'Vanguard Total Stock Market', assetClass: AssetClass.EQUITY });
@@ -154,8 +154,8 @@ describe('PortfolioService', () => {
   });
 
   describe('asset lookup by symbol', () => {
-    it('finds assets by ticker symbol', () => {
-      const svc = createService();
+    it('finds assets by ticker symbol', async () => {
+      const svc = await createService();
       svc.addAsset({ symbol: 'AAPL', name: 'Apple Inc', assetClass: AssetClass.EQUITY });
 
       const found = svc.getAssetBySymbol('AAPL');
