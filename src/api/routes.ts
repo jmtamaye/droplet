@@ -2,9 +2,30 @@
  * Express REST API routes for the portfolio management system.
  */
 
-import { Router, Request, Response } from 'express';
+import express, { Router, Request, Response } from 'express';
 import { PortfolioService } from '../services/portfolio-service';
 import { InstitutionType, AssetClass, Currency, TagCategory } from '../models/types';
+
+/** Parse a single CSV line, respecting quoted fields. */
+function parseCsvLine(line: string): string[] {
+  const cols: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { cur += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { cols.push(cur); cur = ''; }
+      else { cur += ch; }
+    }
+  }
+  cols.push(cur);
+  return cols;
+}
 
 export function createRouter(svc: PortfolioService): Router {
   const router = Router();
@@ -123,6 +144,67 @@ export function createRouter(svc: PortfolioService): Router {
   router.post('/assets/reclassify', (_req: Request, res: Response) => {
     svc.reclassifyAllAssets();
     res.json({ message: 'All assets reclassified' });
+  });
+
+  // ── CSV Import ──────────────────────────────────────────────────
+
+  router.post('/assets/import-csv', express.text({ type: '*/*', limit: '2mb' }), (req: Request, res: Response) => {
+    const csv = typeof req.body === 'string' ? req.body : '';
+    if (!csv.trim()) return res.status(400).json({ error: 'Empty CSV body' });
+
+    const lines = csv.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
+
+    // Parse header
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const nameIdx = header.indexOf('name');
+    const symbolIdx = header.indexOf('symbol');
+    const classIdx = header.findIndex(h => h === 'assetclass' || h === 'asset_class' || h === 'class');
+    const currencyIdx = header.indexOf('currency');
+    const priceIdx = header.findIndex(h => h === 'currentprice' || h === 'current_price' || h === 'price');
+
+    if (nameIdx === -1) return res.status(400).json({ error: 'CSV must have a "name" column' });
+    if (classIdx === -1) return res.status(400).json({ error: 'CSV must have an "assetClass" (or "asset_class" or "class") column' });
+
+    const validClasses = new Set([
+      'equity', 'fixed_income', 'commodity', 'real_estate', 'cash',
+      'crypto', 'vehicle', 'collectible', 'alternative', 'other',
+    ]);
+
+    const created: any[] = [];
+    const errors: string[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCsvLine(lines[i]);
+      const name = cols[nameIdx]?.trim();
+      const assetClassRaw = cols[classIdx]?.trim().toLowerCase();
+
+      if (!name) { errors.push(`Row ${i + 1}: missing name`); continue; }
+      if (!assetClassRaw || !validClasses.has(assetClassRaw)) {
+        errors.push(`Row ${i + 1}: invalid assetClass "${assetClassRaw}"`);
+        continue;
+      }
+
+      const symbol = symbolIdx >= 0 ? cols[symbolIdx]?.trim() || undefined : undefined;
+      const currency = currencyIdx >= 0 ? cols[currencyIdx]?.trim() as Currency || undefined : undefined;
+      const priceStr = priceIdx >= 0 ? cols[priceIdx]?.trim() : undefined;
+      const currentPrice = priceStr ? parseFloat(priceStr) : undefined;
+
+      try {
+        const asset = svc.addAsset({
+          symbol,
+          name,
+          assetClass: assetClassRaw as AssetClass,
+          currency,
+          currentPrice: currentPrice != null && !isNaN(currentPrice) ? currentPrice : undefined,
+        });
+        created.push(asset);
+      } catch (err: any) {
+        errors.push(`Row ${i + 1}: ${err.message}`);
+      }
+    }
+
+    res.status(201).json({ imported: created.length, errors });
   });
 
   // ── Asset Tags ──────────────────────────────────────────────────

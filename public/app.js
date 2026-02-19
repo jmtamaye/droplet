@@ -678,6 +678,40 @@ window.deleteHolding = async function(id) {
   loadHoldings();
 };
 
+// ── CSV Import ──────────────────────────────────────────────────────
+
+document.getElementById('btn-import-csv').addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv,text/csv';
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const res = await fetch('/api/assets/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv' },
+        body: text,
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        alert('Import failed: ' + (result.error || 'Unknown error'));
+        return;
+      }
+      let msg = `Imported ${result.imported} asset(s).`;
+      if (result.errors && result.errors.length > 0) {
+        msg += `\n\n${result.errors.length} row(s) skipped:\n` + result.errors.join('\n');
+      }
+      alert(msg);
+      loadAssets();
+    } catch (err) {
+      alert('Import failed: ' + err.message);
+    }
+  });
+  input.click();
+});
+
 // ── Initial Load ─────────────────────────────────────────────────────
 
 loadDashboard();
