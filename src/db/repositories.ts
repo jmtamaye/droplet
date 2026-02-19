@@ -6,7 +6,7 @@ import { Database } from './adapter';
 import { v4 as uuid } from 'uuid';
 import {
   Institution, Account, Asset, Holding, Tag, AssetTag,
-  InstitutionType, AssetClass, Currency, TagCategory,
+  InstitutionType, Currency, TagCategory,
 } from '../models/types';
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ export class AssetRepo {
   constructor(private db: Database) {}
 
   create(data: {
-    symbol?: string; name: string; assetClass: AssetClass;
+    symbol?: string; name: string; assetClass: string;
     currency?: Currency; currentPrice?: number; metadata?: Record<string, string>;
   }): Asset {
     const asset: Asset = {
@@ -211,6 +211,11 @@ export class AssetRepo {
     return updated;
   }
 
+  getDistinctAssetClasses(): string[] {
+    const rows = this.db.prepare('SELECT DISTINCT asset_class FROM assets ORDER BY asset_class').all() as any[];
+    return rows.map(r => r.asset_class);
+  }
+
   delete(id: string): boolean {
     return this.db.prepare('DELETE FROM assets WHERE id = ?').run(id).changes > 0;
   }
@@ -220,7 +225,7 @@ export class AssetRepo {
       id: row.id,
       symbol: row.symbol ?? undefined,
       name: row.name,
-      assetClass: row.asset_class as AssetClass,
+      assetClass: row.asset_class as string,
       currency: row.currency as Currency,
       currentPrice: row.current_price ?? undefined,
       priceAsOf: row.price_as_of ?? undefined,

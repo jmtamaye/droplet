@@ -7,7 +7,7 @@
 import { Database } from '../db/adapter';
 import {
   Institution, Account, Asset, Holding, Tag, AssetTag,
-  InstitutionType, AssetClass, Currency, TagCategory,
+  InstitutionType, Currency, TagCategory,
   PortfolioSummary, InstitutionBreakdown, AccountBreakdown,
   HoldingView, AllocationSlice, RiskReport,
 } from '../models/types';
@@ -93,7 +93,7 @@ export class PortfolioService {
   // ── Assets ────────────────────────────────────────────────────────
 
   addAsset(data: {
-    symbol?: string; name: string; assetClass: AssetClass;
+    symbol?: string; name: string; assetClass: string;
     currency?: Currency; currentPrice?: number; metadata?: Record<string, string>;
   }): Asset {
     const asset = this.assetRepo.create(data);
@@ -119,6 +119,10 @@ export class PortfolioService {
       this.taggingEngine.classify(updated);
     }
     return updated;
+  }
+
+  getAssetClassLabels(): string[] {
+    return this.assetRepo.getDistinctAssetClasses();
   }
 
   deleteAsset(id: string): boolean {

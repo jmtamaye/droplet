@@ -497,7 +497,14 @@ window.openAddAccount = function(institutionId) {
 
 // ── Add Asset ────────────────────────────────────────────────────────
 
-document.getElementById('btn-add-asset').addEventListener('click', () => {
+document.getElementById('btn-add-asset').addEventListener('click', async () => {
+  // Fetch persisted asset class labels for suggestions
+  let classLabels = [];
+  try {
+    classLabels = await api.get('/assets/class-labels');
+  } catch { /* ignore – defaults shown in placeholder */ }
+  const datalistOpts = classLabels.map(l => `<option value="${l}">`).join('');
+
   openModal('Add Asset', `
     <div class="form-row">
       <div class="form-group">
@@ -516,18 +523,8 @@ document.getElementById('btn-add-asset').addEventListener('click', () => {
     <div class="form-row">
       <div class="form-group">
         <label>Asset Class</label>
-        <select id="f-asset-class">
-          <option value="equity">Equity</option>
-          <option value="fixed_income">Fixed Income</option>
-          <option value="commodity">Commodity</option>
-          <option value="real_estate">Real Estate</option>
-          <option value="cash">Cash</option>
-          <option value="crypto">Crypto</option>
-          <option value="vehicle">Vehicle</option>
-          <option value="collectible">Collectible</option>
-          <option value="alternative">Alternative</option>
-          <option value="other">Other</option>
-        </select>
+        <input id="f-asset-class" list="asset-class-options" placeholder="e.g. equity, fixed_income, or any label..." required />
+        <datalist id="asset-class-options">${datalistOpts}</datalist>
       </div>
       <div class="form-group">
         <label>Currency</label>
@@ -542,11 +539,12 @@ document.getElementById('btn-add-asset').addEventListener('click', () => {
   `, async () => {
     const symbol = document.getElementById('f-asset-symbol').value.trim() || undefined;
     const name = document.getElementById('f-asset-name').value.trim();
-    const assetClass = document.getElementById('f-asset-class').value;
+    const assetClass = document.getElementById('f-asset-class').value.trim().toLowerCase();
     const currency = document.getElementById('f-asset-currency').value;
     const priceStr = document.getElementById('f-asset-price').value;
     const currentPrice = priceStr ? parseFloat(priceStr) : undefined;
     if (!name) throw new Error('Name is required');
+    if (!assetClass) throw new Error('Asset Class is required');
     await api.post('/assets', { symbol, name, assetClass, currency, currentPrice });
     loadAssets();
   });

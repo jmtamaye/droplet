@@ -114,7 +114,7 @@ export interface Asset {
   id: string;
   symbol?: string;              // ticker symbol if applicable (e.g. "SPY", "GLD")
   name: string;                 // human-readable name
-  assetClass: AssetClass;
+  assetClass: string;           // free-form label (e.g. "equity", "fixed_income", or any custom value)
   currency: Currency;
   currentPrice?: number;        // latest known price per unit
   priceAsOf?: string;           // when the price was last updated

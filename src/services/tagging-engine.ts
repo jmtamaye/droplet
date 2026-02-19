@@ -12,7 +12,7 @@
  */
 
 import { Database } from '../db/adapter';
-import { Asset, AssetClass, TagCategory, RiskCategory } from '../models/types';
+import { Asset, TagCategory } from '../models/types';
 import { TagRepo, AssetTagRepo } from '../db/repositories';
 
 // ── Rule Definitions ────────────────────────────────────────────────
@@ -29,8 +29,8 @@ interface ClassificationRule {
   symbolPatterns?: RegExp[];
   /** Regex patterns matched against name (case-insensitive) */
   namePatterns?: RegExp[];
-  /** Match by asset class */
-  assetClasses?: AssetClass[];
+  /** Match by asset class (string labels) */
+  assetClasses?: string[];
   /** Tags to apply when this rule matches */
   tags: TagRule[];
 }
@@ -223,7 +223,7 @@ const RULES: ClassificationRule[] = [
 
   // ── Physical Real Estate ──
   {
-    assetClasses: [AssetClass.REAL_ESTATE],
+    assetClasses: ['real_estate'],
     tags: [
       { tag: 'real_estate_risk', category: TagCategory.RISK_TYPE, description: 'Real estate market risk', weight: 0.7 },
       { tag: 'liquidity_risk', category: TagCategory.RISK_TYPE, description: 'Illiquid asset — hard to sell quickly', weight: 0.3 },
@@ -233,7 +233,7 @@ const RULES: ClassificationRule[] = [
 
   // ── Vehicles ──
   {
-    assetClasses: [AssetClass.VEHICLE],
+    assetClasses: ['vehicle'],
     tags: [
       { tag: 'depreciation_risk', category: TagCategory.RISK_TYPE, description: 'Value depreciates over time', weight: 1.0 },
       { tag: 'vehicle', category: TagCategory.ASSET_TYPE, description: 'Vehicle / auto asset', weight: 1.0 },
@@ -242,7 +242,7 @@ const RULES: ClassificationRule[] = [
 
   // ── Cash & Equivalents ──
   {
-    assetClasses: [AssetClass.CASH],
+    assetClasses: ['cash'],
     symbolPatterns: [/^(SHV|BIL|SGOV|VMFXX|SPAXX|FDRXX)$/i],
     namePatterns: [/money\s*market/i, /cash/i, /savings/i, /\bt.bill/i],
     tags: [
@@ -253,7 +253,7 @@ const RULES: ClassificationRule[] = [
 
   // ── Collectibles / Alternative ──
   {
-    assetClasses: [AssetClass.COLLECTIBLE, AssetClass.ALTERNATIVE],
+    assetClasses: ['collectible', 'alternative'],
     tags: [
       { tag: 'liquidity_risk', category: TagCategory.RISK_TYPE, description: 'Illiquid asset — hard to sell quickly', weight: 0.6 },
       { tag: 'other_risk', category: TagCategory.RISK_TYPE, description: 'Unique / hard-to-model risk', weight: 0.4 },
@@ -264,38 +264,38 @@ const RULES: ClassificationRule[] = [
 
 // ── Fallback by AssetClass ──────────────────────────────────────────
 
-const ASSET_CLASS_FALLBACKS: Record<AssetClass, TagRule[]> = {
-  [AssetClass.EQUITY]: [
+const ASSET_CLASS_FALLBACKS: Record<string, TagRule[]> = {
+  equity: [
     { tag: 'equity_risk', category: TagCategory.RISK_TYPE, description: 'Equity market risk', weight: 1.0 },
   ],
-  [AssetClass.FIXED_INCOME]: [
+  fixed_income: [
     { tag: 'interest_rate_risk', category: TagCategory.RISK_TYPE, description: 'Sensitive to interest rate changes', weight: 0.5 },
     { tag: 'credit_risk', category: TagCategory.RISK_TYPE, description: 'Exposed to credit/default risk', weight: 0.5 },
     { tag: 'fixed_income', category: TagCategory.ASSET_TYPE, description: 'Fixed income exposure', weight: 1.0 },
   ],
-  [AssetClass.COMMODITY]: [
+  commodity: [
     { tag: 'commodity_risk', category: TagCategory.RISK_TYPE, description: 'Commodity price risk', weight: 1.0 },
   ],
-  [AssetClass.REAL_ESTATE]: [
+  real_estate: [
     { tag: 'real_estate_risk', category: TagCategory.RISK_TYPE, description: 'Real estate market risk', weight: 1.0 },
   ],
-  [AssetClass.CASH]: [
+  cash: [
     { tag: 'inflation_risk', category: TagCategory.RISK_TYPE, description: 'Purchasing power erosion', weight: 1.0 },
     { tag: 'cash', category: TagCategory.ASSET_TYPE, description: 'Cash or cash equivalent', weight: 1.0 },
   ],
-  [AssetClass.CRYPTO]: [
+  crypto: [
     { tag: 'crypto_risk', category: TagCategory.RISK_TYPE, description: 'Cryptocurrency volatility risk', weight: 1.0 },
   ],
-  [AssetClass.VEHICLE]: [
+  vehicle: [
     { tag: 'depreciation_risk', category: TagCategory.RISK_TYPE, description: 'Value depreciates over time', weight: 1.0 },
   ],
-  [AssetClass.COLLECTIBLE]: [
+  collectible: [
     { tag: 'liquidity_risk', category: TagCategory.RISK_TYPE, description: 'Illiquid asset', weight: 1.0 },
   ],
-  [AssetClass.ALTERNATIVE]: [
+  alternative: [
     { tag: 'other_risk', category: TagCategory.RISK_TYPE, description: 'Unique / hard-to-model risk', weight: 1.0 },
   ],
-  [AssetClass.OTHER]: [
+  other: [
     { tag: 'other_risk', category: TagCategory.RISK_TYPE, description: 'Unclassified risk', weight: 1.0 },
   ],
 };
@@ -323,7 +323,9 @@ export class TaggingEngine {
 
     // If no specific rule matched, fall back to asset-class defaults
     if (matchedTags.length === 0) {
-      const fallbacks = ASSET_CLASS_FALLBACKS[asset.assetClass] ?? [];
+      const fallbacks = ASSET_CLASS_FALLBACKS[asset.assetClass]
+        ?? ASSET_CLASS_FALLBACKS['other']
+        ?? [];
       matchedTags.push(...fallbacks);
     }
 

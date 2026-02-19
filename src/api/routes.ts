@@ -4,7 +4,7 @@
 
 import express, { Router, Request, Response } from 'express';
 import { PortfolioService } from '../services/portfolio-service';
-import { InstitutionType, AssetClass, Currency, TagCategory } from '../models/types';
+import { InstitutionType, Currency, TagCategory } from '../models/types';
 
 /** Parse a single CSV line, respecting quoted fields. */
 function parseCsvLine(line: string): string[] {
@@ -107,6 +107,16 @@ export function createRouter(svc: PortfolioService): Router {
     res.json(svc.getAssets());
   });
 
+  router.get('/assets/class-labels', (_req: Request, res: Response) => {
+    const defaults = [
+      'equity', 'fixed_income', 'commodity', 'real_estate', 'cash',
+      'crypto', 'vehicle', 'collectible', 'alternative', 'other',
+    ];
+    const persisted = svc.getAssetClassLabels();
+    const merged = Array.from(new Set([...defaults, ...persisted])).sort();
+    res.json(merged);
+  });
+
   router.get('/assets/:id', (req: Request, res: Response) => {
     const asset = svc.getAsset(req.params.id);
     if (!asset) return res.status(404).json({ error: 'Asset not found' });
@@ -123,7 +133,7 @@ export function createRouter(svc: PortfolioService): Router {
     const { symbol, name, assetClass, currency, currentPrice, metadata } = req.body;
     if (!name || !assetClass) return res.status(400).json({ error: 'name and assetClass are required' });
     const asset = svc.addAsset({
-      symbol, name, assetClass: assetClass as AssetClass,
+      symbol, name, assetClass,
       currency: currency as Currency | undefined, currentPrice, metadata,
     });
     res.status(201).json(asset);
@@ -182,10 +192,34 @@ export function createRouter(svc: PortfolioService): Router {
       }
     }
 
-    const validClasses = new Set([
-      'equity', 'fixed_income', 'commodity', 'real_estate', 'cash',
-      'crypto', 'vehicle', 'collectible', 'alternative', 'other',
-    ]);
+    // Lazily created default institution for auto-created accounts
+    let defaultInstitutionId: string | undefined;
+
+    function getOrCreateAccount(accountName: string): string {
+      const key = accountName.toLowerCase();
+      const existing = accountsByName.get(key);
+      if (existing) return existing;
+
+      // Auto-create a default institution if we haven't yet
+      if (!defaultInstitutionId) {
+        const institutions = svc.getInstitutions();
+        const imported = institutions.find(i => i.name === 'Imported');
+        if (imported) {
+          defaultInstitutionId = imported.id;
+        } else {
+          const inst = svc.addInstitution({ name: 'Imported', type: 'other' as InstitutionType });
+          defaultInstitutionId = inst.id;
+        }
+      }
+
+      const acct = svc.addAccount({
+        institutionId: defaultInstitutionId,
+        name: accountName,
+        accountType: 'other',
+      });
+      accountsByName.set(key, acct.id);
+      return acct.id;
+    }
 
     const created: any[] = [];
     const holdingsCreated: any[] = [];
@@ -197,8 +231,8 @@ export function createRouter(svc: PortfolioService): Router {
       const assetClassRaw = cols[classIdx]?.trim().toLowerCase();
 
       if (!name) { errors.push(`Row ${i + 1}: missing name`); continue; }
-      if (!assetClassRaw || !validClasses.has(assetClassRaw)) {
-        errors.push(`Row ${i + 1}: invalid assetClass "${assetClassRaw}"`);
+      if (!assetClassRaw) {
+        errors.push(`Row ${i + 1}: missing assetClass`);
         continue;
       }
 
@@ -207,14 +241,15 @@ export function createRouter(svc: PortfolioService): Router {
       const priceStr = priceIdx >= 0 ? cols[priceIdx]?.trim() : undefined;
       const currentPrice = priceStr ? parseFloat(priceStr) : undefined;
 
-      // Resolve account name for holdings
+      // Resolve (or auto-create) account for holdings
       let resolvedAccountId: string | undefined;
       if (hasHoldingCols && accountIdx >= 0) {
         const accountName = cols[accountIdx]?.trim();
         if (accountName) {
-          resolvedAccountId = accountsByName.get(accountName.toLowerCase());
-          if (!resolvedAccountId) {
-            errors.push(`Row ${i + 1}: account "${accountName}" not found`);
+          try {
+            resolvedAccountId = getOrCreateAccount(accountName);
+          } catch (err: any) {
+            errors.push(`Row ${i + 1}: failed to create account "${accountName}": ${err.message}`);
             continue;
           }
         }
@@ -224,7 +259,7 @@ export function createRouter(svc: PortfolioService): Router {
         const asset = svc.addAsset({
           symbol,
           name,
-          assetClass: assetClassRaw as AssetClass,
+          assetClass: assetClassRaw,
           currency,
           currentPrice: currentPrice != null && !isNaN(currentPrice) ? currentPrice : undefined,
         });
