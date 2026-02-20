@@ -280,6 +280,16 @@ export function createRouter(svc: PortfolioService): Router {
         });
         created.push(asset);
 
+        // Ensure the CSV assetClass value appears in the "By Asset Type" dashboard chart
+        if (assetClassRaw) {
+          try {
+            const normalizedClass = assetClassRaw.replace(/\s+/g, '_');
+            svc.addManualTag(asset.id, normalizedClass, TagCategory.ASSET_TYPE, 1.0);
+          } catch (tagErr: any) {
+            errors.push(`Row ${i + 1}: asset type tag: ${tagErr.message}`);
+          }
+        }
+
         // Import tags from CSV columns
         const tagEntries: { value: string; category: TagCategory }[] = [];
         if (sectorIdx >= 0) {
