@@ -273,12 +273,15 @@ export function createRouter(svc: PortfolioService): Router {
           const marketValue = valStr ? parseFloat(valStr) : undefined;
 
           if (quantity != null && !isNaN(quantity) && quantity > 0) {
+            const computedValue = marketValue != null && !isNaN(marketValue)
+              ? marketValue
+              : (currentPrice != null && !isNaN(currentPrice) ? quantity * currentPrice : 0);
             const holding = svc.addHolding({
               accountId: resolvedAccountId,
               assetId: asset.id,
               quantity,
-              currentValue: marketValue != null && !isNaN(marketValue) ? marketValue : 0,
-              costBasis: marketValue != null && !isNaN(marketValue) ? marketValue : 0,
+              currentValue: computedValue,
+              costBasis: computedValue,
             });
             holdingsCreated.push(holding);
           }
