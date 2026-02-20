@@ -84,8 +84,12 @@ async function loadDashboard() {
   try {
     const summary = await api.get('/portfolio/summary');
     renderDashboard(summary);
-  } catch {
+  } catch (err) {
     document.getElementById('kpi-total-value').textContent = '--';
+    document.getElementById('kpi-cost-basis').textContent = '--';
+    document.getElementById('kpi-gain-loss').textContent = '--';
+    document.getElementById('kpi-return').textContent = '--';
+    console.error('Failed to load dashboard summary:', err);
   }
 }
 
@@ -705,6 +709,8 @@ document.getElementById('btn-import-csv').addEventListener('click', () => {
       }
       alert(msg);
       loadAssets();
+      // Refresh the dashboard in the background so it reflects the new data
+      loadDashboard();
     } catch (err) {
       alert('Import failed: ' + err.message);
     }
