@@ -285,6 +285,14 @@ export function createRouter(svc: PortfolioService): Router {
           try {
             const normalizedClass = assetClassRaw.replace(/\s+/g, '_');
             svc.addManualTag(asset.id, normalizedClass, TagCategory.ASSET_TYPE, 1.0);
+            // Remove any auto-generated ASSET_TYPE tags that conflict with the user's value
+            // (e.g., the auto-classifier may create 'fixed_income' from symbol patterns)
+            const assetTags = svc.getTagsForAsset(asset.id);
+            for (const at of assetTags) {
+              if (at.tag.category === TagCategory.ASSET_TYPE && at.source === 'auto' && at.tag.name !== normalizedClass) {
+                svc.removeTag(asset.id, at.tagId);
+              }
+            }
           } catch (tagErr: any) {
             errors.push(`Row ${i + 1}: asset type tag: ${tagErr.message}`);
           }

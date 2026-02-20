@@ -176,10 +176,18 @@ export interface HoldingView {
   pctOfPortfolio: number;
 }
 
+export interface AllocationSliceAsset {
+  assetName: string;
+  symbol?: string;
+  value: number;
+  pctOfTotal: number;
+}
+
 export interface AllocationSlice {
   label: string;
   value: number;
   pctOfTotal: number;
+  assets?: AllocationSliceAsset[];
 }
 
 // ── Risk Aggregation ────────────────────────────────────────────────

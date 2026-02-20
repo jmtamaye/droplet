@@ -113,6 +113,9 @@ function renderDashboard(s) {
   renderInstitutionBreakdown(s.byInstitution);
 }
 
+// Store slice data so drill-down can access asset details
+const chartSliceData = {};
+
 function renderBarChart(containerId, slices) {
   const el = document.getElementById(containerId);
   if (!slices || slices.length === 0) {
@@ -120,17 +123,60 @@ function renderBarChart(containerId, slices) {
     return;
   }
 
+  chartSliceData[containerId] = slices;
   const maxPct = Math.max(...slices.map(s => s.pctOfTotal), 0.01);
 
   el.innerHTML = slices.map((s, i) => `
-    <div class="bar-row">
+    <div class="bar-row bar-row-clickable" data-chart="${containerId}" data-label="${s.label}" title="Click to expand">
       <span class="bar-label" title="${fmtLabel(s.label)}">${fmtLabel(s.label)}</span>
       <div class="bar-track">
         <div class="bar-fill c${i % 10}" style="width: ${(s.pctOfTotal / maxPct * 100).toFixed(1)}%"></div>
       </div>
+      <span class="bar-value">${fmtMoney(s.value)}</span>
       <span class="bar-pct">${fmtPct(s.pctOfTotal)}</span>
     </div>
+    <div class="bar-detail" id="detail-${containerId}-${s.label}" style="display:none"></div>
   `).join('');
+
+  // Attach click handlers for drill-down
+  el.querySelectorAll('.bar-row-clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      const chart = row.dataset.chart;
+      const label = row.dataset.label;
+      toggleBarDetail(chart, label);
+    });
+  });
+}
+
+function toggleBarDetail(chartId, label) {
+  const detailEl = document.getElementById(`detail-${chartId}-${label}`);
+  if (!detailEl) return;
+
+  // Toggle visibility
+  if (detailEl.style.display !== 'none') {
+    detailEl.style.display = 'none';
+    return;
+  }
+
+  // Collapse any other open detail in this chart
+  const parent = detailEl.parentElement;
+  parent.querySelectorAll('.bar-detail').forEach(d => { d.style.display = 'none'; });
+
+  const slices = chartSliceData[chartId];
+  const slice = slices?.find(s => s.label === label);
+  if (!slice || !slice.assets || slice.assets.length === 0) {
+    detailEl.innerHTML = '<div class="bar-detail-row" style="color:var(--text-dim)">No asset details available</div>';
+    detailEl.style.display = 'block';
+    return;
+  }
+
+  detailEl.innerHTML = slice.assets.map(a => `
+    <div class="bar-detail-row">
+      <span class="bar-detail-name">${a.assetName}${a.symbol ? ' <span style="color:var(--text-dim)">(' + a.symbol + ')</span>' : ''}</span>
+      <span class="bar-detail-value">${fmtMoney(a.value)}</span>
+    </div>
+  `).join('');
+  detailEl.style.display = 'block';
 }
 
 function renderInstitutionBreakdown(institutions) {

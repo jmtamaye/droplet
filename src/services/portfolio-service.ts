@@ -9,7 +9,7 @@ import {
   Institution, Account, Asset, Holding, Tag, AssetTag,
   InstitutionType, Currency, TagCategory,
   PortfolioSummary, InstitutionBreakdown, AccountBreakdown,
-  HoldingView, AllocationSlice, RiskReport,
+  HoldingView, AllocationSlice, AllocationSliceAsset, RiskReport,
 } from '../models/types';
 import {
   InstitutionRepo, AccountRepo, AssetRepo, HoldingRepo,
@@ -267,31 +267,69 @@ export class PortfolioService {
   // ── Aggregation Helpers ───────────────────────────────────────────
 
   private aggregateByTagCategory(holdings: Holding[], total: number, category: TagCategory): AllocationSlice[] {
-    const buckets = new Map<string, number>();
+    const buckets = new Map<string, { value: number; assets: Map<string, AllocationSliceAsset> }>();
+
+    const ensureBucket = (label: string) => {
+      if (!buckets.has(label)) buckets.set(label, { value: 0, assets: new Map() });
+      return buckets.get(label)!;
+    };
 
     for (const h of holdings) {
+      const asset = this.assetRepo.getById(h.assetId);
       const assetTags = this.assetTagRepo.getByAsset(h.assetId);
       const relevantTags = assetTags
         .map(at => ({ at, tag: this.tagRepo.getById(at.tagId) }))
         .filter(t => t.tag?.category === category);
 
       if (relevantTags.length === 0) {
-        const label = 'unclassified';
-        buckets.set(label, (buckets.get(label) ?? 0) + h.currentValue);
+        const bucket = ensureBucket('unclassified');
+        bucket.value += h.currentValue;
+        const assetKey = h.assetId;
+        const existing = bucket.assets.get(assetKey);
+        if (existing) {
+          existing.value += h.currentValue;
+        } else {
+          bucket.assets.set(assetKey, {
+            assetName: asset?.name ?? 'Unknown',
+            symbol: asset?.symbol,
+            value: h.currentValue,
+            pctOfTotal: 0,
+          });
+        }
       } else {
         for (const { at, tag } of relevantTags) {
           const label = tag!.name;
-          buckets.set(label, (buckets.get(label) ?? 0) + h.currentValue * at.weight);
+          const bucket = ensureBucket(label);
+          const contrib = h.currentValue * at.weight;
+          bucket.value += contrib;
+          const assetKey = h.assetId;
+          const existing = bucket.assets.get(assetKey);
+          if (existing) {
+            existing.value += contrib;
+          } else {
+            bucket.assets.set(assetKey, {
+              assetName: asset?.name ?? 'Unknown',
+              symbol: asset?.symbol,
+              value: contrib,
+              pctOfTotal: 0,
+            });
+          }
         }
       }
     }
 
     return Array.from(buckets.entries())
-      .map(([label, value]) => ({
-        label,
-        value,
-        pctOfTotal: total > 0 ? value / total : 0,
-      }))
+      .map(([label, { value, assets }]) => {
+        const assetList = Array.from(assets.values())
+          .map(a => ({ ...a, pctOfTotal: total > 0 ? a.value / total : 0 }))
+          .sort((a, b) => b.value - a.value);
+        return {
+          label,
+          value,
+          pctOfTotal: total > 0 ? value / total : 0,
+          assets: assetList,
+        };
+      })
       .sort((a, b) => b.value - a.value);
   }
 
