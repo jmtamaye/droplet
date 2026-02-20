@@ -400,7 +400,7 @@ export class TaggingEngine {
    * Ensure a tag exists in the database; create if missing.
    */
   private ensureTag(name: string, category: TagCategory, description: string): { id: string } {
-    const existing = this.tagRepo.getByName(name);
+    const existing = this.tagRepo.getByNameAndCategory(name, category);
     if (existing) return existing;
     return this.tagRepo.create({ name, category, description });
   }

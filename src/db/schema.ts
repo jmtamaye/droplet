@@ -56,9 +56,10 @@ CREATE TABLE IF NOT EXISTS holdings (
 
 CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   category TEXT NOT NULL,
-  description TEXT
+  description TEXT,
+  UNIQUE(name, category)
 );
 
 CREATE TABLE IF NOT EXISTS asset_tags (
@@ -77,6 +78,31 @@ CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_assets_symbol ON assets(symbol);
 `;
 
+/** Migrate the tags table from UNIQUE(name) to UNIQUE(name, category) if needed. */
+function migrateTags(db: Database): void {
+  // Check if old unique index on just 'name' exists (sqlite_master stores the original DDL)
+  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tags'").get() as any;
+  if (!tableInfo) return; // table doesn't exist yet, will be created fresh
+  // If the DDL has 'UNIQUE(name, category)' we're already migrated
+  if (tableInfo.sql && /UNIQUE\s*\(\s*name\s*,\s*category\s*\)/i.test(tableInfo.sql)) return;
+
+  // Rebuild the table with the new constraint
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tags_new (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT,
+      UNIQUE(name, category)
+    );
+    INSERT OR IGNORE INTO tags_new SELECT * FROM tags;
+    DROP TABLE tags;
+    ALTER TABLE tags_new RENAME TO tags;
+  `);
+  db.pragma('foreign_keys = ON');
+}
+
 export async function createDatabase(dbPath?: string): Promise<Database> {
   const resolvedPath = dbPath || path.join(process.cwd(), 'portfolio.db');
   const db = await openDatabase(resolvedPath);
@@ -84,6 +110,7 @@ export async function createDatabase(dbPath?: string): Promise<Database> {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
+  migrateTags(db);
   db.exec(SCHEMA_SQL);
 
   return db;

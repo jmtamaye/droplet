@@ -339,6 +339,11 @@ export class TagRepo {
     return row ? this.mapRow(row) : undefined;
   }
 
+  getByNameAndCategory(name: string, category: TagCategory): Tag | undefined {
+    const row = this.db.prepare('SELECT * FROM tags WHERE name = ? AND category = ?').get(name, category) as any;
+    return row ? this.mapRow(row) : undefined;
+  }
+
   getAll(): Tag[] {
     return (this.db.prepare('SELECT * FROM tags ORDER BY category, name').all() as any[]).map(this.mapRow);
   }

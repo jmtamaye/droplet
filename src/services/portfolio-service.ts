@@ -178,7 +178,7 @@ export class PortfolioService {
   }
 
   addManualTag(assetId: string, tagName: string, category: TagCategory, weight?: number, description?: string): AssetTag {
-    let tag = this.tagRepo.getByName(tagName);
+    let tag = this.tagRepo.getByNameAndCategory(tagName, category);
     if (!tag) {
       tag = this.tagRepo.create({ name: tagName, category, description });
     }
