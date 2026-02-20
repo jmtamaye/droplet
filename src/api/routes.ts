@@ -6,6 +6,15 @@ import express, { Router, Request, Response } from 'express';
 import { PortfolioService } from '../services/portfolio-service';
 import { InstitutionType, Currency, TagCategory } from '../models/types';
 
+/** Strip thousand-separator commas and currency symbols from a numeric string before parsing. */
+function parseNum(s: string | undefined): number | undefined {
+  if (!s) return undefined;
+  const cleaned = s.replace(/[$,\s]/g, '');
+  if (!cleaned) return undefined;
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? undefined : n;
+}
+
 /** Parse a single CSV line, respecting quoted fields. */
 function parseCsvLine(line: string): string[] {
   const cols: string[] = [];
@@ -166,7 +175,7 @@ export function createRouter(svc: PortfolioService): Router {
     if (lines.length < 2) return res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
 
     // Parse header
-    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const header = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
     const nameIdx = header.indexOf('name');
     const symbolIdx = header.indexOf('symbol');
     const classIdx = header.findIndex(h => h === 'assetclass' || h === 'asset_class' || h === 'class');
@@ -175,6 +184,13 @@ export function createRouter(svc: PortfolioService): Router {
     const qtyIdx = header.indexOf('quantity');
     const valueIdx = header.findIndex(h => h === 'marketvalue' || h === 'market_value' || h === 'currentvalue' || h === 'current_value' || h === 'value');
     const accountIdx = header.indexOf('account');
+
+    // Tag columns: sector, geography, risk_type, strategy, tags (custom)
+    const sectorIdx = header.indexOf('sector');
+    const geoIdx = header.findIndex(h => h === 'geography' || h === 'geo' || h === 'region');
+    const riskIdx = header.findIndex(h => h === 'risk_type' || h === 'risktype' || h === 'risk');
+    const strategyIdx = header.indexOf('strategy');
+    const tagsIdx = header.findIndex(h => h === 'tags' || h === 'tag' || h === 'custom_tags');
 
     if (nameIdx === -1) return res.status(400).json({ error: 'CSV must have a "name" column' });
     if (classIdx === -1) return res.status(400).json({ error: 'CSV must have an "assetClass" (or "asset_class" or "class") column' });
@@ -238,8 +254,7 @@ export function createRouter(svc: PortfolioService): Router {
 
       const symbol = symbolIdx >= 0 ? cols[symbolIdx]?.trim() || undefined : undefined;
       const currency = currencyIdx >= 0 ? cols[currencyIdx]?.trim() as Currency || undefined : undefined;
-      const priceStr = priceIdx >= 0 ? cols[priceIdx]?.trim() : undefined;
-      const currentPrice = priceStr ? parseFloat(priceStr) : undefined;
+      const currentPrice = parseNum(priceIdx >= 0 ? cols[priceIdx]?.trim() : undefined);
 
       // Resolve (or auto-create) account for holdings
       let resolvedAccountId: string | undefined;
@@ -261,21 +276,55 @@ export function createRouter(svc: PortfolioService): Router {
           name,
           assetClass: assetClassRaw,
           currency,
-          currentPrice: currentPrice != null && !isNaN(currentPrice) ? currentPrice : undefined,
+          currentPrice: currentPrice ?? undefined,
         });
         created.push(asset);
 
+        // Import tags from CSV columns
+        const tagEntries: { value: string; category: TagCategory }[] = [];
+        if (sectorIdx >= 0) {
+          const v = cols[sectorIdx]?.trim();
+          if (v) tagEntries.push({ value: v, category: TagCategory.SECTOR });
+        }
+        if (geoIdx >= 0) {
+          const v = cols[geoIdx]?.trim();
+          if (v) tagEntries.push({ value: v, category: TagCategory.GEOGRAPHY });
+        }
+        if (riskIdx >= 0) {
+          const v = cols[riskIdx]?.trim();
+          if (v) tagEntries.push({ value: v, category: TagCategory.RISK_TYPE });
+        }
+        if (strategyIdx >= 0) {
+          const v = cols[strategyIdx]?.trim();
+          if (v) tagEntries.push({ value: v, category: TagCategory.STRATEGY });
+        }
+        if (tagsIdx >= 0) {
+          const v = cols[tagsIdx]?.trim();
+          if (v) {
+            // Tags column supports semicolon-separated values
+            for (const t of v.split(';')) {
+              const trimmed = t.trim();
+              if (trimmed) tagEntries.push({ value: trimmed, category: TagCategory.CUSTOM });
+            }
+          }
+        }
+        for (const te of tagEntries) {
+          try {
+            svc.addManualTag(asset.id, te.value, te.category, 1.0);
+          } catch (tagErr: any) {
+            errors.push(`Row ${i + 1}: tag "${te.value}": ${tagErr.message}`);
+          }
+        }
+
         // Create holding if quantity column exists and account resolved
         if (hasHoldingCols && resolvedAccountId) {
-          const qtyStr = cols[qtyIdx]?.trim();
-          const quantity = qtyStr ? parseFloat(qtyStr) : undefined;
-          const valStr = valueIdx >= 0 ? cols[valueIdx]?.trim() : undefined;
-          const marketValue = valStr ? parseFloat(valStr) : undefined;
+          const quantity = parseNum(cols[qtyIdx]?.trim());
+          const marketValue = parseNum(valueIdx >= 0 ? cols[valueIdx]?.trim() : undefined);
 
-          if (quantity != null && !isNaN(quantity) && quantity > 0) {
-            const computedValue = marketValue != null && !isNaN(marketValue)
+          if (quantity != null && quantity > 0) {
+            const computedValue = marketValue != null
               ? marketValue
-              : (currentPrice != null && !isNaN(currentPrice) ? quantity * currentPrice : 0);
+              : (currentPrice != null ? quantity * currentPrice : 0);
             const holding = svc.addHolding({
               accountId: resolvedAccountId,
               assetId: asset.id,
